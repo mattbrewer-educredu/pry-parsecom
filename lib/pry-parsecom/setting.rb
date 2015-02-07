@@ -10,10 +10,10 @@ module PryParsecom
     LOGIN_URL = 'https://parse.com/apps'
     LOGIN_SUCCESS_FILENAME= 'apps.html'
     LOGIN_ERROR_FILENAME = 'user_session.html'
-    APPS_XPATH = '/html/body/div[4]/div[2]/div/div/div/div[3]/ul/li/ul/li/a'
+    APPS_XPATH = '/html/body/div[1]/div/div[1]/div/ul/li/a'
     APP_NAME_XPATH = '//*[@id="parse_app_name"]'
     APP_KEYS_CSS = 'div.app_keys.window'
-    APP_ID_XPATH = 'div[2]/div[1]/div[2]/div/input'
+    APP_ID_XPATH = '/html/body/div[2]/div[3]/div[1]/div/div[1]/div/div[2]'
     API_KEY_XPATH = 'div[2]/div[5]/div[2]/div/input'
     MASTER_KEY_XPATH = 'div[2]/div[6]/div[2]/div/input'
 
@@ -116,19 +116,21 @@ module PryParsecom
           puts 'login error'
           return
         end
-
+		
+		p apps_page.search(APPS_XPATH)
         apps_page.search(APPS_XPATH).each do |a|
           href = a.attributes['href'].to_s
           count_page = @@agent.get "#{href}/collections/count"
           schema = JSON.parse count_page.content
           edit_page = @@agent.get "#{href}/edit"
-          app_name = edit_page.search(APP_NAME_XPATH).first.attributes['value'].to_s
-          app_keys = edit_page.search('div.app_keys.window')
-          app_id = app_keys.search(APP_ID_XPATH).first.attributes['value'].to_s
-          api_key = app_keys.search(API_KEY_XPATH).first.attributes['value'].to_s
-          master_key = app_keys.search(MASTER_KEY_XPATH).first.attributes['value'].to_s
+          app_name = a.children.to_s
+		      app_body = edit_page.body
+          app_keys = app_body.scan(/value: '([a-zA-Z0-9]+)'/)
+          app_id = app_keys[0]
+          api_key = app_keys[4]
+          master_key = app_keys[5]
 
-          next if read_setting_file(IGNORES_FILENAME).split("\n").include? app_name
+          #next if read_setting_file(IGNORES_FILENAME).split("\n").include? app_name
 
           @@apps[app_name] = Setting.new app_name, app_id, api_key, master_key, schema
         end
@@ -185,7 +187,7 @@ module PryParsecom
       schemas['collection'].each do |e|
         class_name = e['id']
         next if class_name[0] == '_'
-
+		    class_name = class_name.to_s.capitalize
         if Object.const_defined? class_name
           puts "#{class_name.to_s} has already exist."
           next
@@ -198,7 +200,7 @@ module PryParsecom
       schemas['collection'].each do |e|
         class_name = e['id']
         next if class_name[0] == '_'
-
+		class_name = class_name.to_s.capitalize
         if Object.const_defined? class_name
           klass = Object.const_get class_name
           if klass < Parse::Object
